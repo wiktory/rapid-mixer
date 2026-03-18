@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="hu">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rapid Mixer</title>
+    {% load static %}
+    <link rel="stylesheet" type="text/css" href="{% static 'rapidmixer/style.css' %}">
+    <script 
+    src="https://kit.fontawesome.com/3550d4d4ea.js" crossorigin="anonymous">
+   
+
+
+
+    </script>
+</head>
+
+<body>
+
+
+
+    
+
+
+<div class="container text-start" >
+
+
+    <div class="d-flex justify-content-between align-items-center" style="padding-top: 50px;">
+
+        <a href="{% url 'index' %}" class="text-decoration-none">
+            <h1 class="m-0">RAPID MIXER</h1>
+        </a>
+
+        <button class="btn p-0 border-0 bg-transparent"
+                data-bs-toggle="modal"
+                data-bs-target="#myModal">
+            <i class="fa-solid fa-circle-info fa-2x"></i>
+        </button>
+
+    </div>
+
+
+
+    <div class="row" style="padding-top: 50px;">
+      <div class="col-sm-7">
+        <h3>Zene hozzáadása</h3>
+    
+        <form method="get">
+        <div class="d-flex">
+            
+            <input class="form-control form-control" type="text" placeholder="Írd be az előadót vagy a szám címét" name="music_search" value="{{ request.GET.music_search }}">
+            <div class="input-group-append">
+                <button class="btn btn-success" type="submit">Keresés</button>
+              </div>
+          
+        </div>
+        </form>
+
+<!-- Ez itt a session megoldás -->
+
+<h2>Találatok</h2>
+<ul>
+  {% for track in tracks %}
+    <li>
+      {{ track.performer }} – {{ track.title }}
+      <a href="{% url 'add_to_playlist' track.id %}?q={{ query }}" style="text-decoration: none;">+ Playlist</a>
+    </li>
+  {% endfor %}
+</ul>
+
+<h3 style="padding-top: 30;">Beállítások</h3>
+<div>
+  <label for="rangeBpm" class="form-label">Sebesség (80 - 150 BPM)</label>
+  <input type="range" class="form-range" min="80" max="150" value="115" id="rangeBpm">
+  <output for="rangeBpm" id="rangeValue" aria-hidden="true"></output>
+  
+</div>
+
+<div style="padding-top: 15px;">
+  <label for="rangeFade" class="form-label">Zeneszámok közötti átmenet ideje (30 - 60 másodperc)</label>
+  <input type="range" class="form-range" min="30" max="60" value="45" id="rangeFade">
+  <output for="rangeFade" id="rangeValue1" aria-hidden="true"></output>
+
+
+<script>
+  // This is an example script, please modify as needed
+  const rangeInput = document.getElementById('rangeBpm');
+  const rangeOutput = document.getElementById('rangeValue');
+
+  // Set initial value
+  rangeOutput.textContent = rangeInput.value;
+
+  rangeInput.addEventListener('input', function() {
+    rangeOutput.textContent = this.value;
+  });
+</script>
+
+
+<script>
+  // This is an example script, please modify as needed
+  const rangeInput1 = document.getElementById('rangeFade');
+  const rangeOutput1 = document.getElementById('rangeValue1');
+
+  // Set initial value
+  rangeOutput1.textContent = rangeInput1.value;
+
+  rangeInput1.addEventListener('input', function() {
+    rangeOutput1.textContent = this.value;
+  });
+</script>
+</div>
+
+
+
+
+<div id="preloader" style="display:none; margin-top:20px;">
+    <p>Mix készítése folyamatban...</p>
+    <div style="width: 300px; background:#ddd; border-radius:8px; overflow:hidden;">
+        <div id="progressBar" style="width:0%; height:10px; background:green;"></div>
+    </div>
+    <p id="progressText">0%</p>
+</div>
+
+<div class="d-grid gap-2" style="padding-top: 30px;">
+    <button id="mixButton" type="button" class="btn btn-success">
+    KÉREM A MIXET!
+</button>
+    
+<script>
+
+let downloadUrl = null;
+
+const bpmSlider = document.getElementById("rangeBpm");
+const fadeSlider = document.getElementById("rangeFade");
+
+mixButton.addEventListener("click", async function () {
+
+    // ha már kész a mix, akkor letöltés
+    if (downloadUrl) {
+        window.location.href = downloadUrl;
+        return;
+    }
+
+    const bpm = bpmSlider.value;
+    const fade = fadeSlider.value;
+
+    const query = "{{ query|default:''|escapejs }}";
+
+    console.log(bpm,fade);
+
+    preloader.style.display = "block";
+
+    const startResponse = await fetch(`/playlist/start_mix/${bpm}/${fade}/?q=${encodeURIComponent(query)}`);
+    const startData = await startResponse.json();
+
+    const jobId = startData.job_id;
+
+    const interval = setInterval(async () => {
+
+        const progressResponse = await fetch(`/playlist/mix_progress/${jobId}/`);
+        const progressData = await progressResponse.json();
+
+        const progress = progressData.progress || 0;
+        progressBar.style.width = progress + "%";
+        progressText.textContent = progress + "%";
+
+        if (progressData.status === "done") {
+
+            clearInterval(interval);
+
+            progressBar.style.width = "100%";
+            progressText.textContent = "100%";
+
+            downloadUrl = progressData.download_url;
+
+            mixButton.textContent = "Fájl letöltése";
+
+            preloader.style.display = "none";
+        }
+
+    }, 1000);
+
+});
+
+</script>
+
+  </div>
+
+
+    </div>
+    
+      <div class="col-sm-5">
+        <h3>Playlist</h3>
+
+
+{% load static %}
+<!--
+<ul id="playlist">
+  {% for track in playlist %}
+    <li data-src="{% static track.path %}">
+      {{track.performer }} - {{ track.title }} - {{track.path}}
+      <button onclick="playTrack(this)">▶</button>
+    </li>
+  {% endfor %}
+</ul>
+-->
+<div id="playlist" style="padding-bottom: 10px;">
+{% for track in playlist %}
+
+<div class="track d-flex align-items-center justify-content-between flex-nowrap"
+     style="background-color: #003f50; margin: 3px; border-radius: 8px; padding: 10px;"
+     draggable="true">
+
+    <div class="flex-grow-1 me-2" style="min-width: 0;">
+        <small class="d-block text-truncate">{{ track.performer }} - {{ track.title }}</small>
+    </div>
+
+    <div class="d-flex align-items-center flex-shrink-0">
+        <div data-src="{% static track.path %}" class="me-2">
+            <div type="button" onclick="playTrack(this)" style="color: #2aa198; cursor: pointer;">
+                <i class="fa-solid fa-play"></i>
+            </div>
+        </div>
+
+        <div>
+            <a type="button" href="{% url 'delete_from_playlist' track.id %}?q={{ query }}"
+               style="color: #2aa198;">
+                <i class="fa-solid fa-trash-can"></i>
+            </a>
+        </div>
+    </div>
+</div>
+
+{% empty %}
+    <p>A playlist üres</p>
+{% endfor %}
+
+</div>
+
+<a type="button" class="btn btn-warning" href="{% url 'delete_all_from_playlist' %}?q={{ query }}">Playlist törlése</a>
+
+<script>
+
+// drag&drom JS
+
+document.addEventListener("DOMContentLoaded", function () {
+  const list = document.getElementById("playlist");
+  let draggedItem = null;
+
+  list.addEventListener("dragstart", function(e) {
+    if (e.target.classList.contains("track")) {
+      draggedItem = e.target;
+      e.target.style.opacity = "0.5";
+    }
+  });
+
+  list.addEventListener("dragend", function(e) {
+    if (e.target.classList.contains("track")) {
+      e.target.style.opacity = "1";
+      draggedItem = null;
+    }
+  });
+
+  list.addEventListener("dragover", function(e) {
+    e.preventDefault();
+    const afterElement = getDragAfterElement(list, e.clientY);
+    if (afterElement == null) {
+      list.appendChild(draggedItem);
+    } else {
+      list.insertBefore(draggedItem, afterElement);
+    }
+  });
+
+  // Segédfüggvény: megtalálja, melyik elem után kell beszúrni
+  function getDragAfterElement(container, y) {
+    const draggableElements = [...container.querySelectorAll(".track:not(.dragging)")];
+
+    return draggableElements.reduce((closest, child) => {
+      const box = child.getBoundingClientRect();
+      const offset = y - box.top - box.height / 2;
+      if (offset < 0 && offset > closest.offset) {
+        return { offset: offset, element: child };
+      } else {
+        return closest;
+      }
+    }, { offset: Number.NEGATIVE_INFINITY }).element;
+  }
+
+});
+
+// track lejátszás JS
+
+let currentAudio = null;  // Globális változó az aktuális Audio objektumnak
+let currentButton = null;
+
+function playTrack(button) {
+    const li = button.parentElement;
+    const src = li.getAttribute("data-src");
+    console.log(src);
+
+    const icon = button.querySelector("i");
+
+    // Ha ugyanarra kattint → stop
+    if (currentButton === button) {
+        currentAudio.pause();
+        currentAudio = null;
+
+        icon.classList.remove("fa-stop");
+        icon.classList.add("fa-play");
+
+        currentButton = null;
+        return;
+
+    }
+
+    // Ha már van egy audio, először állítsuk le
+    if (currentAudio) {
+        currentAudio.pause();
+        currentAudio = null;
+
+        const oldIcon = currentButton.querySelector("i");
+        oldIcon.classList.remove("fa-stop");
+        oldIcon.classList.add("fa-play");
+    }
+
+    // Létrehozunk egy új Audio objektumot
+    currentAudio = new Audio(src);
+
+    // Elindítjuk a lejátszást
+    currentAudio.play();
+
+    icon.classList.remove("fa-play");
+    icon.classList.add("fa-stop");
+
+    currentButton = button;   
+    
+}
+
+</script>
+
+
+    </div>
+    </div>
+  </div>
+
+  <div class="modal fade bd-example-modal-lg" id="myModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+
+      <div class="modal-header">
+        <h5 class="modal-title">A RAPID MIXER MŰKÖDÉSE</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+
+          <p>Zenei mix előállítása néhány lépésben. Az alkalmazás saját zenei adatbázissal rendelkezik, szerzői jogi okokból nincs lehetőség zeneszámok feltöltésére és megosztására.</p><br>
+          <ol>
+          <li>A Zene hozzáadása című keresési mezőbe írd be keresett előadót vagy a szám címét, majd nyomj entert vagy kattints a Keresés gombra.</li>
+          <li>Amennyiben az adatbázisban van találat, úgy a kereséséi mező alatt jelenik meg a lista.</li>
+          <li>A Találatok közül + Playlist gombbal add hozzá a Playlist-hez a zenéket, amiket mixelni szeretnél.
+          <li>A Playlist mezőben drag&drop segítségével módosíthatod a zeneszámok sorrendjét.
+          <li>A Beállítások panelen a csúszkák segítségével megadhatod a mix sebességét és a zeneszámok közötti átmenet idejét.</li>
+          <li>Ha minden beállítással végeztél, a KÉREM A MIXET! gombra kattintva tudod elindítani a mix generálását.</li>
+          <li>A mix generálása eltarthat egy ideig, az alkalmazás kiírja az elkészültségi szintet amíg nem végez.</li>
+          <li>A mix generálása után megjelenik a MIX LETÖLTÉSE gomb, aminek megnyomásával mentheted az elkészült zenei mixet.</li>
+          </ol>
+          <p> JÓ SZÓRAKOZÁST!</p>
+        </div>
+
+
+
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

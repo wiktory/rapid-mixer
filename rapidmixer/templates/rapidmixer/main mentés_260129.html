@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="hu">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rapid Mixer</title>
+    {% load static %}
+    <link rel="stylesheet" type="text/css" href="{% static 'rapidmixer/style.css' %}">
+    <script src="https://kit.fontawesome.com/3550d4d4ea.js" crossorigin="anonymous"></script>
+</head>
+
+<body>
+
+<div class="row">
+    <div style="border-color: azure; border: 1px;" class="col" >
+        <a href="{% url 'index' %}"><h1 style="padding-left: 50px; padding-top: 50px;">RAPID MIXER</h1></a>
+    </div>
+    
+    <div class="col" style="text-align: right; padding-right: 50px; padding-top: 50px;">
+        <i class="fa-solid fa-circle-info fa-3x"></i>
+    </div>
+</div>
+
+<div class="container text-start" >
+
+    <div class="row" style="padding-top: 50px;">
+      <div class="col-sm-7">
+        <h3>Zene hozzáadása</h3>
+    
+        <form method="get">
+        <div class="d-flex">
+            
+            <input class="form-control form-control" type="text" placeholder="Írd be az előadót vagy a szám címét" name="music_search" value="{{ request.GET.music_search }}">
+            <div class="input-group-append">
+                <button class="btn btn-success" type="submit">Keresés</button>
+              </div>
+          
+        </div>
+        </form>
+
+<!-- Ez itt a session megoldás -->
+
+<h2>Találatok</h2>
+<ul>
+  {% for track in tracks %}
+    <li>
+      {{ track.performer }} – {{ track.title }}
+      <a href="{% url 'add_to_playlist' track.id %}?q={{ query }}">+ Playlist</a>
+    </li>
+  {% endfor %}
+</ul>
+
+<!-- ez volt a korábbi helye a playlistnek
+<h2>Playlist</h2>
+<ul>
+  {% for track in playlist %}
+    <li>{{ track.performer }} – {{ track.title }}</li>
+  {% empty %}
+    <li>A playlist üres</li>
+  {% endfor %}
+</ul>
+-->
+
+<!-- - ez volna a JS megoldás, ami ügye jelen esetben nem jó
+<h2>Keresési eredmények</h2>
+
+{% if query %}
+    <p>Találatok erre: <strong>{{ query }}</strong></p>
+{% endif %}
+
+<ul>
+{% for track in tracks %}
+
+    <li data-id="{{ track.id }}"
+            data-title="{{ track.title }}"
+            data-performer="{{ track.performer }}">
+            {{ track.performer }} – {{ track.title }}
+            <button onclick="addToPlaylist(this)">+</button>
+    </li>
+
+{% empty %}
+    <li>Nincs találat</li>
+{% endfor %}
+</ul>
+
+<h2>Playlist</h2>
+<ul id="playlist"></ul>
+
+<script>
+function addToPlaylist(button) {
+    const li = button.parentElement;
+
+    const title = li.dataset.title;
+    const performer = li.dataset.performer;
+
+    const playlist = document.getElementById("playlist");
+
+    const newItem = document.createElement("li");
+    newItem.textContent = `${performer} – ${title}`;
+
+    playlist.appendChild(newItem);
+}
+</script>
+
+-->
+
+<h3 style="padding-top: 30;">Beállítások</h3>
+<div>
+  <label for="range4" class="form-label">Sebesség (80 - 150 BPM)</label>
+  <input type="range" class="form-range" min="80" max="150" value="115" id="range4">
+  <output for="range4" id="rangeValue" aria-hidden="true"></output>
+  
+  <script>
+    // This is an example script, please modify as needed
+    const rangeInput = document.getElementById('range4');
+    const rangeOutput = document.getElementById('rangeValue');
+  
+    // Set initial value
+    rangeOutput.textContent = rangeInput.value;
+  
+    rangeInput.addEventListener('input', function() {
+      rangeOutput.textContent = this.value;
+    });
+  </script>
+</div>
+
+<div style="padding-top: 15px;">
+<label for="range1" class="form-label">Zeneszámok közötti átmenet ideje (30 - 60 másodperc)</label>
+<input type="range" class="form-range" min="30" max="60" value="45" id="range1">
+<output for="range1" id="rangeValue1" aria-hidden="true"></output>
+
+<script>
+  // This is an example script, please modify as needed
+  const rangeInput1 = document.getElementById('range1');
+  const rangeOutput1 = document.getElementById('rangeValue1');
+
+  // Set initial value
+  rangeOutput1.textContent = rangeInput1.value;
+
+  rangeInput1.addEventListener('input', function() {
+    rangeOutput1.textContent = this.value;
+  });
+</script>
+</div>
+
+<div class="d-grid gap-2" style="padding-top: 30px;">
+    <button class="btn btn-success" type="button">KÉREM A MIXET!</button>
+    
+  </div>
+
+
+    </div>
+    
+      <div class="col-sm-5">
+        <h3>Playlist</h3>
+
+
+{% load static %}
+
+<ul id="playlist">
+  {% for track in playlist %}
+    <li data-src="{% static track.path %}">
+      {{track.performer }} - {{ track.title }} - {{track.path}}
+      <button onclick="playTrack(this)">▶</button>
+    </li>
+  {% endfor %}
+</ul>
+
+ <!-- <audio id="audioPlayer" controls></audio> -->
+
+<script>
+
+
+let currentAudio = null;  // Globális változó az aktuális Audio objektumnak
+
+function playTrack(button) {
+    const li = button.parentElement;
+    const src = li.getAttribute("data-src");
+
+    // Ha már van egy audio, először állítsuk le
+    if (currentAudio) {
+        currentAudio.pause();
+        currentAudio = null;
+    }
+
+    // Létrehozunk egy új Audio objektumot
+    currentAudio = new Audio(src);
+
+    // Elindítjuk a lejátszást
+    currentAudio.play();
+}
+
+
+//function playTrack(button) {
+    // Megkeressük azt a <li>-t, amelyikben a gomb van
+    //const li = button.parentElement;
+
+    // Kiolvassuk az mp3 URL-t a data-src attribútumból
+   // const src = li.getAttribute("data-src");
+
+//src.play();
+ // document.write(src);
+
+    // Lekérjük az audio elemet
+   // const player = document.getElementById("audioPlayer");
+
+    // Beállítjuk a forrást
+   // player.src = src;
+
+    // Elindítjuk a lejátszást
+    //player.play();
+//}
+</script>
+
+
+
+{% for track in playlist %}
+
+
+<div class="row" style="background-color: #003f50; margin: 3px; border-radius: 8px; padding: 10px; ">
+    <div style="border-color: azure; border: 1px; vertical-align: baseline;" class="col-sm-10" >
+        <small> {{ track.performer }} - {{ track.title }}</small>
+    </div>
+    
+    <div class="col-sm-1" style="text-align: right; ">
+        <a type="button" href="{% url 'audio_play' track.id %}?q={{ query }}" style="color: #2aa198;  margin-left: 3px; margin-right: 3px; "><i class="fa-solid fa-circle-play fa-1x" ></i></div> </a>
+    </div>
+
+    <div class="col-sm-1" style="text-align: right; ">
+        <a type="button" href="{% url 'delete_from_playlist' track.id %}?q={{ query }}" style="color: #2aa198; text-align: right; margin-left: 3px; margin-right: 3px; "><i class="fa-solid fa-trash-can"></i></a>
+    </div>
+</div>
+
+  {% empty %}
+    <h3>A playlist üres</h3>
+  {% endfor %}
+
+  <audio controls autoplay>
+    <source src="{{ track.path }}" type="audio/mpeg">
+</audio>
+
+<!-- ez volt az összes zeneszám kilistázása        
+
+{% for music in musics %}
+<div class="row" style="background-color: #003f50; margin: 3px; border-radius: 8px; padding: 10px; ">
+    <div style="border-color: azure; border: 1px; vertical-align: baseline;" class="col-sm-10" >
+        <small> {{ music.performer }} - {{ music.title }}</small>
+    </div>
+    
+    <div class="col-sm-1" style="text-align: right; ">
+        <div type="button" style="color: #2aa198;  margin-left: 3px; margin-right: 3px; "><i class="fa-solid fa-circle-play fa-1x" ></i></div>
+    </div>
+
+    <div class="col-sm-1" style="text-align: right; ">
+        <div type="button" style="color: #2aa198; text-align: right; margin-left: 3px; margin-right: 3px; "><i class="fa-solid fa-trash-can"></i></div>
+    </div>
+</div>
+
+{% empty %}
+    <li>Nincs még track</li>
+{% endfor %}
+-->
+    </div>
+    </div>
+  </div>
+
+</body>
+
+
+
+</html>
