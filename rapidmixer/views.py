@@ -2,7 +2,7 @@ from django.shortcuts import render, redirect
 from .models import Music # Music model importállása
 from django.db.models import Q #query kezeléshez
 import librosa
-import sounddevice as sd
+# import sounddevice as sd
 
 import os
 import tempfile
