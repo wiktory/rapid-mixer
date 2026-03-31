@@ -2,7 +2,7 @@ from django.shortcuts import render, redirect
 from .models import Music # Music model importállása
 from django.db.models import Q #query kezeléshez
 import librosa
-# import sounddevice as sd
+
 
 import os
 import tempfile
@@ -107,6 +107,8 @@ def start_mix(request, bpm, fade):
         os.path.join(settings.BASE_DIR, "rapidmixer", "static", music.path)
         for music in ordered_musics
     ]
+
+    print (track_paths);
 
     job_id = str(uuid.uuid4())
     temp_dir = os.path.join(settings.BASE_DIR, "temp_mixes")
