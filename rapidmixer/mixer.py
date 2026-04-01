@@ -84,7 +84,7 @@ def mix_tracklist_to_target_bpm(
         if progress_callback:
             progress_callback(min(progress, 100))
 
-    y_mix, _ = librosa.load(track_paths[0], sr=sr, mono=False)
+    y_mix, _ = librosa.load(track_paths[0], sr=sr, mono=True)
     update_progress()
 
     bpm0, _ = estimate_bpm(y_mix, sr)
@@ -97,7 +97,7 @@ def mix_tracklist_to_target_bpm(
     update_progress()
 
     for path in track_paths[1:]:
-        y, _ = librosa.load(path, sr=sr, mono=False)
+        y, _ = librosa.load(path, sr=sr, mono=True)
         update_progress()
 
         bpm, _ = estimate_bpm(y, sr)
