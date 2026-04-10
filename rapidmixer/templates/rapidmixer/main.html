@@ -14,6 +14,46 @@
 
 
     </script>
+<style>
+
+.mix-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mix-overlay-content {
+    background: #073642;
+    padding: 30px;
+    border-radius: 14px;
+    width: 90%;
+    max-width: 420px;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+}
+
+.progress-container {
+    width: 100%;
+    height: 22px;
+    background: #e5e5e5;
+    border-radius: 999px;
+    overflow: hidden;
+    margin-top: 16px;
+    margin-bottom: 12px;
+}
+
+.progress-bar-fill {
+    width: 0%;
+    height: 100%;
+    background: #198754;
+    transition: width 0.3s ease;
+}
+</style>
+
 </head>
 
 <body>
@@ -42,11 +82,11 @@
 
 
 
-    <div class="row" style="padding-top: 50px;">
-      <div class="col-sm-7">
+    <div class="row" style="padding-top: 50px; ">
+      <div class="col-sm-7" >
         <h3>Zene hozzáadása</h3>
     
-        <form method="get">
+        <form method="get" style="padding-bottom: 10px;">
         <div class="d-flex">
             
             <input class="form-control form-control" type="text" placeholder="Írd be az előadót vagy a szám címét" name="music_search" value="{{ request.GET.music_search }}">
@@ -59,15 +99,20 @@
 
 <!-- Ez itt a session megoldás -->
 
-<h2>Találatok</h2>
-<ul>
-  {% for track in tracks %}
-    <li>
-      {{ track.performer }} – {{ track.title }}
-      <a href="{% url 'add_to_playlist' track.id %}?q={{ query }}" style="text-decoration: none;">+ Playlist</a>
-    </li>
-  {% endfor %}
-</ul>
+{% if tracks %}
+    <h2>Találatok</h2>
+    <ul>
+        {% for track in tracks %}
+            <li>
+                {{ track.performer }} – {{ track.title }}
+                <a href="{% url 'add_to_playlist' track.id %}?q={{ query }}">+ Playlist</a>
+            </li>
+        {% endfor %}
+    </ul>
+
+{% elif query %}
+    <p>Nincs találat a(z) "<strong>{{ query }}</strong>" keresésre.</p>
+{% endif %}
 
 <h3 style="padding-top: 30;">Beállítások</h3>
 <div>
@@ -113,13 +158,27 @@
 
 
 
-
+<!--
 <div id="preloader" style="display:none; margin-top:20px;">
     <p>Mix készítése folyamatban...</p>
     <div style="width: 300px; background:#ddd; border-radius:8px; overflow:hidden;">
         <div id="progressBar" style="width:0%; height:10px; background:green;"></div>
     </div>
     <p id="progressText">0%</p>
+</div>
+-->
+
+<div id="mixOverlay" class="mix-overlay" style="display: none;">
+    <div class="mix-overlay-content">
+        <h4>Mix készítése folyamatban...</h4>
+        <p>Kérlek várj, a zenék feldolgozása zajlik.</p>
+
+        <div class="progress-container">
+            <div id="progressBar" class="progress-bar-fill"></div>
+        </div>
+
+        <p id="progressText">0%</p>
+    </div>
 </div>
 
 <div class="d-grid gap-2" style="padding-top: 30px;">
@@ -128,17 +187,34 @@
 </button>
     
 <script>
-
 let downloadUrl = null;
 
+const mixButton = document.getElementById("mixButton");
 const bpmSlider = document.getElementById("rangeBpm");
 const fadeSlider = document.getElementById("rangeFade");
 
+const mixOverlay = document.getElementById("mixOverlay");
+const progressBar = document.getElementById("progressBar");
+const progressText = document.getElementById("progressText");
+
 mixButton.addEventListener("click", async function () {
 
-    // ha már kész a mix, akkor letöltés
+    // Ha már elkészült a mix, akkor a gomb letöltést indítson
     if (downloadUrl) {
+        // letöltés indítása
         window.location.href = downloadUrl;
+
+        // reset állapot
+        downloadUrl = null;
+
+        mixButton.textContent = "KÉREM A MIXET!";
+        mixButton.disabled = false;
+        //mixButton.style.backgroundColor = "#2aa198";
+
+        // progress reset (opcionális)
+        progressBar.style.width = "0%";
+        progressText.textContent = "0%";
+
         return;
     }
 
@@ -147,42 +223,88 @@ mixButton.addEventListener("click", async function () {
 
     const query = "{{ query|default:''|escapejs }}";
 
-    console.log(bpm,fade);
+    console.log("BPM:", bpm, "FADE:", fade);
 
-    preloader.style.display = "block";
+    // Overlay megjelenítése
+    mixOverlay.style.display = "flex";
 
-    const startResponse = await fetch(`/playlist/start_mix/${bpm}/${fade}/?q=${encodeURIComponent(query)}`);
-    const startData = await startResponse.json();
+    // Progress reset
+    progressBar.style.width = "0%";
+    progressText.textContent = "0%";
 
-    const jobId = startData.job_id;
+    // Gomb ideiglenes tiltása, hogy ne lehessen többször elindítani
+    mixButton.disabled = true;
 
-    const interval = setInterval(async () => {
+    try {
+        const startResponse = await fetch(`/playlist/start_mix/${bpm}/${fade}/?q=${encodeURIComponent(query)}`);
+        const startData = await startResponse.json();
 
-        const progressResponse = await fetch(`/playlist/mix_progress/${jobId}/`);
-        const progressData = await progressResponse.json();
-
-        const progress = progressData.progress || 0;
-        progressBar.style.width = progress + "%";
-        progressText.textContent = progress + "%";
-
-        if (progressData.status === "done") {
-
-            clearInterval(interval);
-
-            progressBar.style.width = "100%";
-            progressText.textContent = "100%";
-
-            downloadUrl = progressData.download_url;
-
-            mixButton.textContent = "Fájl letöltése";
-
-            preloader.style.display = "none";
+        // Ha backend hibát ad vissza
+        if (startData.error) {
+            alert(startData.error);
+            mixOverlay.style.display = "none";
+            mixButton.disabled = false;
+            return;
         }
 
-    }, 1000);
+        const jobId = startData.job_id;
 
+        const interval = setInterval(async () => {
+            try {
+                const progressResponse = await fetch(`/playlist/mix_progress/${jobId}/`);
+                const progressData = await progressResponse.json();
+
+                if (progressData.error) {
+                    clearInterval(interval);
+                    alert(progressData.error);
+                    mixOverlay.style.display = "none";
+                    mixButton.disabled = false;
+                    return;
+                }
+
+                const progress = progressData.progress || 0;
+
+                progressBar.style.width = progress + "%";
+                progressText.textContent = progress + "%";
+
+                if (progressData.status === "done") {
+                    clearInterval(interval);
+
+                    progressBar.style.width = "100%";
+                    progressText.textContent = "100%";
+
+                    downloadUrl = progressData.download_url;
+
+                    mixButton.textContent = "FÁJL LETÖLTÉSE!";
+                    //mixButton.style.backgroundColor = "#cb4b16";
+
+                    mixOverlay.style.display = "none";
+                    mixButton.disabled = false;
+                }
+
+                if (progressData.status === "error") {
+                    clearInterval(interval);
+                    alert(progressData.error || "Hiba történt a mix készítése közben.");
+                    mixOverlay.style.display = "none";
+                    mixButton.disabled = false;
+                }
+
+            } catch (error) {
+                clearInterval(interval);
+                console.error("Progress lekérdezési hiba:", error);
+                alert("Hiba történt a feldolgozás állapotának lekérdezése közben.");
+                mixOverlay.style.display = "none";
+                mixButton.disabled = false;
+            }
+        }, 1000);
+
+    } catch (error) {
+        console.error("Mix indítási hiba:", error);
+        alert("Hiba történt a mix indításakor.");
+        mixOverlay.style.display = "none";
+        mixButton.disabled = false;
+    }
 });
-
 </script>
 
   </div>
@@ -242,7 +364,7 @@ mixButton.addEventListener("click", async function () {
 
 <script>
 
-// drag&drom JS
+// drag&drop JS
 
 document.addEventListener("DOMContentLoaded", function () {
   const list = document.getElementById("playlist");
