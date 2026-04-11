@@ -74,7 +74,7 @@
 
         <button class="btn p-0 border-0 bg-transparent"
                 data-bs-toggle="modal"
-                data-bs-target="#myModal">
+                data-bs-target="#infoModal">
             <i class="fa-solid fa-circle-info fa-2x"></i>
         </button>
 
@@ -419,6 +419,7 @@ let currentButton = null;
 function playTrack(button) {
     const li = button.parentElement;
     const src = li.getAttribute("data-src");
+  
     console.log(src);
 
     const icon = button.querySelector("i");
@@ -462,11 +463,45 @@ function playTrack(button) {
 </script>
 
 
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const message = "{{ playlist_modal_message|default:''|escapejs }}";
+
+    if (message) {
+        document.getElementById("playlistModalText").textContent = message;
+
+        const modal = new bootstrap.Modal(document.getElementById("playlistModal"));
+        modal.show();
+    }
+});
+</script>
+
+<div class="modal fade" id="playlistModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+
+      <div class="modal-header">
+        <h5 class="modal-title">Üzenet</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+        <p id="playlistModalText"></p>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-success" data-bs-dismiss="modal">OK</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
     </div>
     </div>
   </div>
 
-  <div class="modal fade bd-example-modal-lg" id="myModal" tabindex="-1">
+  <div class="modal fade bd-example-modal-lg" id="infoModal" tabindex="-1">
   <div class="modal-dialog modal-lg">
     <div class="modal-content">
 
@@ -496,6 +531,8 @@ function playTrack(button) {
     </div>
   </div>
 </div>
+
+
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>

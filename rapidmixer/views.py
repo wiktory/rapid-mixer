@@ -28,6 +28,9 @@ def index(request): # ezt nézzem majd át - kell a track? kell ennyi mindent á
     
     query = request.GET.get("music_search", "")
 
+    playlist_modal_message = request.session.pop("playlist_modal_message", None)
+    #playlist_count = len(playlist_ids)   
+
     if query:
         tracks = Music.objects.filter(
             Q(performer__icontains=query) | Q(title__icontains=query)
@@ -38,7 +41,9 @@ def index(request): # ezt nézzem majd át - kell a track? kell ennyi mindent á
             "tracks": tracks,
             "playlist": playlist,
             "query": query,
-            "track": track
+            "track": track,
+            "playlist_modal_message": playlist_modal_message,
+            #"playlist_count": playlist_count,
         }
     else:
         # tracks és queryt nem adjuk át, vagy üres a lista, tehát nincs keresési eredmény
@@ -46,7 +51,9 @@ def index(request): # ezt nézzem majd át - kell a track? kell ennyi mindent á
         context = {
             "playlist": playlist,
             "musics": musics,
-            "track": track
+            "track": track,
+            "playlist_modal_message": playlist_modal_message,
+            #"playlist_count": playlist_count,
         }
 
     return render(request, "rapidmixer/main.html", context)
@@ -54,13 +61,19 @@ def index(request): # ezt nézzem majd át - kell a track? kell ennyi mindent á
 # ez a session megoldás, hogy tároljuk a tracklistet a session-ben, hogy ne vesszen el. Böngészőbezárásig él
 
 def add_to_playlist(request, id):
- 
-    playlist = request.session.get("playlist", [])
+    playlist = [int(x) for x in request.session.get("playlist", [])]
+    id = int(id)
 
-    if id not in playlist:
+    if id in playlist:
+        request.session["playlist_modal_message"] = "Ez a zene már szerepel a playlistben."
+    elif len(playlist) >= 5:
+        request.session["playlist_modal_message"] = "Elérted a maximum zeneszámot."
+    else:
         playlist.append(id)
+        request.session["playlist"] = playlist
+        #request.session["playlist_modal_message"] = "A zene hozzáadva a playlisthez."
 
-    request.session["playlist"] = playlist
+    request.session.modified = True
 
     query = request.GET.get("q", "")
     if query:
