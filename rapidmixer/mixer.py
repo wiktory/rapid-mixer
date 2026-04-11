@@ -64,6 +64,7 @@ def safe_trim_for_fade(y, sr, fade_seconds, min_after_fade_seconds=2.0):
 
 def mix_tracklist_to_target_bpm(
     track_paths: list[str],
+    track_bpms,
     target_bpm: int,
     fade_seconds: float,
     out_path: str = "mixed.wav",
@@ -87,20 +88,20 @@ def mix_tracklist_to_target_bpm(
     y_mix, _ = librosa.load(track_paths[0], sr=sr, mono=True)
     update_progress()
 
-    bpm0, _ = estimate_bpm(y_mix, sr)
+    #bpm0, _ = estimate_bpm(y_mix, sr) - ez kellett a BPM számításhoz, de nagyon lassú
+    bpm0 = float(track_bpms[0])
     rate0 = (target_bpm / bpm0) if bpm0 > 0 else 1.0
     y_mix = librosa.effects.time_stretch(y_mix, rate=rate0)
     y_mix = rms_normalize(y_mix, target_rms=target_rms)
     y_mix = safe_trim_for_fade(y_mix, sr, fade_seconds)
     update_progress()
 
-    update_progress()
-
-    for path in track_paths[1:]:
+    for i, path in enumerate(track_paths[1:], start=1):
         y, _ = librosa.load(path, sr=sr, mono=True)
         update_progress()
 
-        bpm, _ = estimate_bpm(y, sr)
+        #bpm, _ = estimate_bpm(y, sr)
+        bpm = float(track_bpms[i])
         rate = (target_bpm / bpm) if bpm > 0 else 1.0
         y = librosa.effects.time_stretch(y, rate=rate)
         y = rms_normalize(y, target_rms=target_rms)

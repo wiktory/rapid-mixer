@@ -162,7 +162,10 @@ def start_mix(request, bpm, fade):
         for music in ordered_musics
     ]
 
-    print (track_paths);
+    track_bpms = [float(music.bpm) for music in ordered_musics]    
+
+    print (track_paths)
+    print("track_bpms:", track_bpms)
 
     job_id = str(uuid.uuid4())
     
@@ -208,6 +211,7 @@ def start_mix(request, bpm, fade):
         try:
             mix_tracklist_to_target_bpm(
                 track_paths=track_paths,
+                track_bpms=track_bpms,
                 target_bpm=int(bpm),
                 fade_seconds=float(fade),
                 out_path=out_path,
