@@ -1,6 +1,7 @@
 from django.shortcuts import render, redirect
 from .models import Music # Music model importállása
 from django.db.models import Q #query kezeléshez
+from .models import MixGeneration
 import librosa
 
 
@@ -8,9 +9,12 @@ import os
 import tempfile
 import threading
 import uuid
+import time
+from django.utils import timezone
 from django.conf import settings
 from django.http import JsonResponse, FileResponse
 from .mixer import mix_tracklist_to_target_bpm
+
 
 # from django.http import JsonResponse --> ez a JS megoldáshoz kellene
 
@@ -161,9 +165,20 @@ def start_mix(request, bpm, fade):
     print (track_paths);
 
     job_id = str(uuid.uuid4())
+    
     temp_dir = os.path.join(settings.BASE_DIR, "temp_mixes")
     os.makedirs(temp_dir, exist_ok=True)
     out_path = os.path.join(temp_dir, f"{job_id}.wav")
+
+    MixGeneration.objects.create(
+        job_id=job_id,
+        status="processing",
+        bpm=int(bpm),
+        fade=int(fade),
+        track_count=len(ordered_musics),
+        playlist_snapshot=",".join(str(m.id) for m in ordered_musics),
+        output_filename=os.path.basename(out_path),
+    )
 
     # session kezdeti állapot
     request.session[f"mix_status_{job_id}"] = {
@@ -187,6 +202,9 @@ def start_mix(request, bpm, fade):
         session.save()
 
     def worker():
+        
+        start_time = time.time()
+
         try:
             mix_tracklist_to_target_bpm(
                 track_paths=track_paths,
@@ -208,6 +226,13 @@ def start_mix(request, bpm, fade):
             session.session_data = Session.objects.encode(data)
             session.save()
 
+            elapsed_seconds = time.time() - start_time
+
+            mix_record = MixGeneration.objects.get(job_id=job_id)
+            mix_record.status = "done"
+            mix_record.duration_seconds = elapsed_seconds
+            mix_record.save()            
+
         except Exception as e:
             from django.contrib.sessions.models import Session
             session_key = request.session.session_key
@@ -220,6 +245,11 @@ def start_mix(request, bpm, fade):
             }
             session.session_data = Session.objects.encode(data)
             session.save()
+
+            mix_record = MixGeneration.objects.get(job_id=job_id)
+            mix_record.status = "error"
+            mix_record.error_message = str(e)
+            mix_record.save()            
 
     threading.Thread(target=worker, daemon=True).start()
 
@@ -255,6 +285,12 @@ def download_mix(request, job_id):
 
     if not os.path.exists(file_path):
         return JsonResponse({"error": "Fájl nem található."}, status=404)
+    
+    # DB rekord frissítése letöltéskor
+    mix_record = MixGeneration.objects.get(job_id=job_id)
+    mix_record.status = "downloaded"
+    mix_record.downloaded_at = timezone.now()
+    mix_record.save()    
 
     file_handle = open(file_path, "rb")
 
