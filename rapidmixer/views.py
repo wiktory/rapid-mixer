@@ -81,6 +81,43 @@ def add_to_playlist(request, id):
 
     return redirect("index")
 
+from django.http import JsonResponse
+
+def update_playlist_order(request):
+    print("order update");
+    order = request.GET.get("order", "")
+
+    if not order:
+        return JsonResponse({
+            "status": "error",
+            "message": "Nem érkezett sorrend."
+        }, status=400)
+
+    try:
+        new_order = [int(x) for x in order.split(",") if x.strip()]
+    except ValueError:
+        return JsonResponse({
+            "status": "error",
+            "message": "Érvénytelen sorrend."
+        }, status=400)
+
+    current_playlist = [int(x) for x in request.session.get("playlist", [])]
+
+    # Biztonsági ellenőrzés: ugyanazok az elemek legyenek, csak más sorrendben
+    if sorted(new_order) != sorted(current_playlist):
+        return JsonResponse({
+            "status": "error",
+            "message": "A playlist elemei nem egyeznek."
+        }, status=400)
+
+    request.session["playlist"] = new_order
+    request.session.modified = True
+
+    return JsonResponse({
+        "status": "success",
+        "message": "A playlist sorrendje frissítve."
+    })
+
 def delete_from_playlist(request, id):
     playlist = request.session.get("playlist", [])
 
