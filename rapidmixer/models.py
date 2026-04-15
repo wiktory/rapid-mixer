@@ -7,12 +7,16 @@ class Music(models.Model):
     bpm = models.FloatField(blank=True, null=True)
     path = models.CharField(max_length=255)
 
+    start_mix_point = models.FloatField(blank=True, null=True)
+    end_mix_point = models.FloatField(blank=True, null=True)
+
     def __str__(self) -> str:
         return self.performer
     
 class MixGeneration(models.Model):
     job_id = models.CharField(max_length=100, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    progress = models.IntegerField(default=0)
     status = models.CharField(max_length=20, default="processing")
     bpm = models.IntegerField()
     fade = models.IntegerField()
