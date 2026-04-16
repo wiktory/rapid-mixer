@@ -8,7 +8,7 @@ from .models import MixGeneration
 
 @admin.register(Music)
 class MusicAdmin(admin.ModelAdmin):
-    list_display = ("id","performer", "title","bpm","start_mix_point",'end_mix_point')
+    list_display = ("id","performer", "title","bpm")
     search_fields = ("performer", "title")
     ordering = ("performer", "title")    
 
