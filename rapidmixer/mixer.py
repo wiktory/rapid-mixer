@@ -114,7 +114,7 @@ def mix_tracklist_to_target_bpm(
     target_bpm,
     fade_seconds,
     out_path="mixed.wav",
-    sr=44100,
+    sr=32000,
     target_rms=0.1,
     progress_callback=None,
 ):
@@ -143,7 +143,7 @@ def mix_tracklist_to_target_bpm(
     rate0 = (target_bpm / bpm0) if bpm0 > 0 else 1.0
 
     # Kis eltérésnél nem stretch-elünk
-    if abs(rate0 - 1.0) > 0.02:
+    if abs(rate0 - 1.0) > 0.04:
         y_mix = time_stretch_stereo(y_mix, rate=rate0)
 
     y_mix = rms_normalize(y_mix, target_rms)
@@ -163,7 +163,7 @@ def mix_tracklist_to_target_bpm(
         rate = (target_bpm / bpm) if bpm > 0 else 1.0
 
         # Kis eltérésnél nem stretch-elünk
-        if abs(rate - 1.0) > 0.02:
+        if abs(rate - 1.0) > 0.04:
             y = time_stretch_stereo(y, rate=rate)
 
         y = rms_normalize(y, target_rms)
