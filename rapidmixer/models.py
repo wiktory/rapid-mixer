@@ -7,9 +7,6 @@ class Music(models.Model):
     bpm = models.FloatField()
     path = models.CharField(max_length=255)
 
-    start_mix_point = models.FloatField(blank=True, null=True)
-    end_mix_point = models.FloatField(blank=True, null=True)
-
     def __str__(self) -> str:
         return self.performer
     
