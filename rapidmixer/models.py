@@ -4,7 +4,7 @@ from django.db import models
 class Music(models.Model):
     performer = models.CharField(max_length=100)
     title = models.CharField(max_length=255)
-    bpm = models.FloatField(blank=True, null=True)
+    bpm = models.FloatField()
     path = models.CharField(max_length=255)
 
     start_mix_point = models.FloatField(blank=True, null=True)

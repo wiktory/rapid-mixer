@@ -100,10 +100,10 @@
 <!-- Ez itt a session megoldás -->
 
 {% if tracks %}
-    <h2>Találatok</h2>
-    <ul>
+    <h3>Találatok</h3>
+    <ul class="list-group">
         {% for track in tracks %}
-            <li>
+            <li class="list-group-item list-group-item-action  d-flex justify-content-between align-items-center">
                 {{ track.performer }} – {{ track.title }}
                 <a href="{% url 'add_to_playlist' track.id %}?q={{ query }}">+ Playlist</a>
             </li>
@@ -114,7 +114,7 @@
     <p>Nincs találat a(z) "<strong>{{ query }}</strong>" keresésre.</p>
 {% endif %}
 
-<h3 style="padding-top: 30;">Beállítások</h3>
+<h3 style="padding-top: 30px;">Beállítások</h3>
 <div>
   <label for="rangeBpm" class="form-label">Sebesség (80 - 150 BPM)</label>
   <input type="range" class="form-range" min="80" max="150" value="115" id="rangeBpm">
@@ -217,7 +217,7 @@
 </div>
 
 {% empty %}
-    <p>A playlist üres</p>
+    <p>A playlist jelenleg üres. A bal oldali keresőmező segítségével keress rá a zene előadójára vagy címére és a találi listából add hozzá a mixelendő zenéket!</p>
 {% endfor %}
 
 </div>
@@ -244,8 +244,9 @@ function savePlaylistOrder() {
 }
 </script>
 
+{% if playlist %}
 <a type="button" class="btn btn-warning" href="{% url 'delete_all_from_playlist' %}?q={{ query }}">Playlist törlése</a>
-
+{% endif %}
 <script>
 
 // drag&drop JS
@@ -351,14 +352,19 @@ function playTrack(button) {
 
 
 <script>
+function showPlaylistModal(message, title = "Üzenet") {
+    document.getElementById("playlistModalText").textContent = message;
+    document.querySelector("#playlistModal .modal-title").textContent = title;
+
+    const modal = new bootstrap.Modal(document.getElementById("playlistModal"));
+    modal.show();
+}
+
 document.addEventListener("DOMContentLoaded", function () {
     const message = "{{ playlist_modal_message|default:''|escapejs }}";
 
     if (message) {
-        document.getElementById("playlistModalText").textContent = message;
-
-        const modal = new bootstrap.Modal(document.getElementById("playlistModal"));
-        modal.show();
+        showPlaylistModal(message, "Üzenet");
     }
 });
 </script>
@@ -389,9 +395,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
 
     </div>
-    
-<div class="row mt-4">
-    <div class="col-12 d-flex justify-content-center">
+ 
+  
+
+<div class="row" style="padding-top: 30px;">
+    <div class="col-sm-7 d-flex justify-content-center">
         <button id="mixButton" 
                 type="button" 
                 class="btn btn-success btn-lg"
@@ -402,9 +410,17 @@ document.addEventListener("DOMContentLoaded", function () {
 </div>
 
 <div id="mixOverlay" class="mix-overlay" style="display: none;">
-    <div class="mix-overlay-content">
-        <h4>Mix készítése folyamatban...</h4>
-        <p>Kérlek várj, a zenék feldolgozása zajlik.</p>
+    <div class="mix-overlay-content position-relative">
+
+        <button id="closeOverlayButton"
+                type="button"
+                class="btn-close position-absolute top-0 end-0 m-2"
+                style="display: none;"
+                aria-label="Bezárás">
+        </button>
+
+        <h4 id="mixOverlayTitle">Mix készítése folyamatban!</h4>
+        <p id="mixOverlayMessage">Kérlek várj, a zenék feldolgozása zajlik.</p>
 
         <div class="progress-container">
             <div id="progressBar" class="progress-bar-fill"></div>
@@ -413,7 +429,6 @@ document.addEventListener("DOMContentLoaded", function () {
         <p id="progressText">0%</p>
     </div>
 </div>
-
 
     
 <script>
@@ -426,12 +441,18 @@ const fadeSlider = document.getElementById("rangeFade");
 const mixOverlay = document.getElementById("mixOverlay");
 const progressBar = document.getElementById("progressBar");
 const progressText = document.getElementById("progressText");
+const mixOverlayTitle = document.getElementById("mixOverlayTitle");
+const mixOverlayMessage = document.getElementById("mixOverlayMessage");
+const closeOverlayButton = document.getElementById("closeOverlayButton");
+
+closeOverlayButton.addEventListener("click", function () {
+    mixOverlay.style.display = "none";
+});
 
 mixButton.addEventListener("click", async function () {
 
     // Ha már elkészült a mix, akkor a gomb letöltést indítson
     if (downloadUrl) {
-        // letöltés indítása
         const link = document.createElement("a");
         link.href = downloadUrl;
         link.download = "";
@@ -439,44 +460,43 @@ mixButton.addEventListener("click", async function () {
         link.click();
         document.body.removeChild(link);
 
-        // reset állapot
         downloadUrl = null;
 
         mixButton.textContent = "KÉREM A MIXET!";
         mixButton.disabled = false;
-        //mixButton.style.backgroundColor = "#2aa198";
 
-        // progress reset (opcionális)
         progressBar.style.width = "0%";
         progressText.textContent = "0%";
+
+        mixOverlay.style.display = "none";
+        closeOverlayButton.style.display = "none";
 
         return;
     }
 
     const bpm = bpmSlider.value;
     const fade = fadeSlider.value;
-
     const query = "{{ query|default:''|escapejs }}";
 
     console.log("BPM:", bpm, "FADE:", fade);
 
-    // Overlay megjelenítése
-    mixOverlay.style.display = "flex";
+    // Overlay induló állapota
+    mixOverlayTitle.textContent = "Mix készítése folyamatban!";
+    mixOverlayMessage.textContent = "Kérlek várj, a zenék feldolgozása zajlik.";
+    closeOverlayButton.style.display = "none";
 
-    // Progress reset
+    mixOverlay.style.display = "flex";
     progressBar.style.width = "0%";
     progressText.textContent = "0%";
 
-    // Gomb ideiglenes tiltása, hogy ne lehessen többször elindítani
     mixButton.disabled = true;
 
     try {
         const startResponse = await fetch(`/playlist/start_mix/${bpm}/${fade}/?q=${encodeURIComponent(query)}`);
         const startData = await startResponse.json();
 
-        // Ha backend hibát ad vissza
         if (startData.error) {
-            alert(startData.error);
+            showPlaylistModal(startData.error);
             mixOverlay.style.display = "none";
             mixButton.disabled = false;
             return;
@@ -491,7 +511,7 @@ mixButton.addEventListener("click", async function () {
 
                 if (progressData.error) {
                     clearInterval(interval);
-                    alert(progressData.error);
+                    showPlaylistModal(progressData.error);
                     mixOverlay.style.display = "none";
                     mixButton.disabled = false;
                     return;
@@ -511,15 +531,18 @@ mixButton.addEventListener("click", async function () {
                     downloadUrl = progressData.download_url;
 
                     mixButton.textContent = "FÁJL LETÖLTÉSE!";
-                    //mixButton.style.backgroundColor = "#cb4b16";
-
-                    mixOverlay.style.display = "none";
                     mixButton.disabled = false;
+
+                    mixOverlayTitle.textContent = "A mix elkészült!";
+                    mixOverlayMessage.textContent =
+                        "A Fájl letöltése gombbal tudod letölteni a mixet.";
+
+                    closeOverlayButton.style.display = "block";
                 }
 
                 if (progressData.status === "error") {
                     clearInterval(interval);
-                    alert(progressData.error || "Hiba történt a mix készítése közben.");
+                    showPlaylistModal(progressData.error || "Hiba történt a mix készítése közben.");
                     mixOverlay.style.display = "none";
                     mixButton.disabled = false;
                 }
@@ -527,7 +550,7 @@ mixButton.addEventListener("click", async function () {
             } catch (error) {
                 clearInterval(interval);
                 console.error("Progress lekérdezési hiba:", error);
-                alert("Hiba történt a feldolgozás állapotának lekérdezése közben.");
+                showPlaylistModal("Hiba történt a feldolgozás állapotának lekérdezése közben.");
                 mixOverlay.style.display = "none";
                 mixButton.disabled = false;
             }
@@ -535,7 +558,7 @@ mixButton.addEventListener("click", async function () {
 
     } catch (error) {
         console.error("Mix indítási hiba:", error);
-        alert("Hiba történt a mix indításakor.");
+        showPlaylistModal("Hiba történt a mix indításakor.");
         mixOverlay.style.display = "none";
         mixButton.disabled = false;
     }

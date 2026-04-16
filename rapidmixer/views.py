@@ -135,7 +135,7 @@ def start_mix(request, bpm, fade):
     playlist_ids = request.session.get("playlist", [])
 
     if len(playlist_ids) < 2:
-        return JsonResponse({"error": "Legalább 2 zene kell."}, status=400)
+        return JsonResponse({"error": "Minimum 2 zenét kell tartalmaznia a playlist-nek, hogy elindítsd a mix generálást!"}, status=400)
 
     musics = Music.objects.filter(id__in=playlist_ids)
     music_map = {music.id: music for music in musics}
