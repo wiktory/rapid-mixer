@@ -234,7 +234,7 @@
                     <h5 class="modal-title">Megnyitás böngészőben</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                
+
                 <div class="modal-body">
                     <p>
                         Úgy tűnik, hogy az oldal egy alkalmazáson belüli böngészőben nyílt meg.
@@ -298,9 +298,6 @@
         }
 
         function showExternalBrowserModal() {
-            const link = document.getElementById("externalBrowserLink");
-            link.href = window.location.href;
-
             const modal = new bootstrap.Modal(document.getElementById("externalBrowserModal"));
             modal.show();
         }
