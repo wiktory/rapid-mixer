@@ -108,7 +108,7 @@
 
                 <div style="padding-top: 15px;">
                     <label for="rangeFade" class="form-label">Zeneszámok közötti átmenet ideje (10 - 25 másodperc)</label>
-                    <input type="range" class="form-range" min="10" max="25" value="15" id="rangeFade">
+                    <input type="range" class="form-range" min="10" max="30" value="20" id="rangeFade">
                     <output for="rangeFade" id="rangeValue1" aria-hidden="true"></output>
                 </div>
             </div>
@@ -273,16 +273,24 @@
             modal.show();
         }
 
-        function setJobIdInUrl(jobId) {
-            const url = new URL(window.location.href);
-            url.searchParams.set("job_id", jobId);
-            window.history.replaceState({}, "", url);
+        function getJobIdFromLocation() {
+            const pathMatch = window.location.pathname.match(/^\/mix\/([a-zA-Z0-9-]+)\/$/);
+            if (pathMatch) {
+                return pathMatch[1];
+            }
+
+            const params = new URLSearchParams(window.location.search);
+            return params.get("job_id");
         }
 
-        function clearJobIdFromUrl() {
-            const url = new URL(window.location.href);
-            url.searchParams.delete("job_id");
-            window.history.replaceState({}, "", url);
+        function setJobUrl(jobId) {
+            const jobUrl = `${window.location.origin}/mix/${jobId}/`;
+            window.history.replaceState({}, "", jobUrl);
+        }
+
+        function clearJobUrl() {
+            const cleanUrl = `${window.location.origin}/`;
+            window.history.replaceState({}, "", cleanUrl);
         }
 
         function savePlaylistOrder() {
@@ -350,7 +358,6 @@
             mixOverlayTitle.textContent = "Mix készítése folyamatban!";
             mixOverlayMessage.textContent = "Kérlek várj, a zenék feldolgozása zajlik.";
             closeOverlayButton.style.display = "none";
-
             mixOverlay.style.display = "flex";
             mixButton.disabled = true;
 
@@ -364,7 +371,7 @@
                         showPlaylistModal(progressData.error, "Hiba");
                         mixOverlay.style.display = "none";
                         mixButton.disabled = false;
-                        clearJobIdFromUrl();
+                        clearJobUrl();
                         return;
                     }
 
@@ -398,7 +405,7 @@
                         );
                         mixOverlay.style.display = "none";
                         mixButton.disabled = false;
-                        clearJobIdFromUrl();
+                        clearJobUrl();
                     }
                 } catch (error) {
                     clearInterval(interval);
@@ -428,8 +435,7 @@
             const closeOverlayButton = document.getElementById("closeOverlayButton");
 
             const playlistMessage = "{{ playlist_modal_message|default:''|escapejs }}";
-            const urlParams = new URLSearchParams(window.location.search);
-            const restoredJobId = urlParams.get("job_id");
+            const restoredJobId = getJobIdFromLocation();
 
             if (playlistMessage) {
                 showPlaylistModal(playlistMessage, "Üzenet");
@@ -523,7 +529,7 @@
                     progressText.textContent = "0%";
                     mixOverlay.style.display = "none";
                     closeOverlayButton.style.display = "none";
-                    clearJobIdFromUrl();
+                    clearJobUrl();
                     return;
                 }
 
@@ -552,7 +558,7 @@
                     }
 
                     const jobId = startData.job_id;
-                    setJobIdInUrl(jobId);
+                    setJobUrl(jobId);
                     startProgressPolling(jobId);
                 } catch (error) {
                     console.error("Mix indítási hiba:", error);

@@ -130,6 +130,8 @@ def delete_all_from_playlist(request):
 
     return redirect("index")
 
+def mix_page(request, job_id):
+    return redirect(f"/?job_id={job_id}")
 
 def start_mix(request, bpm, fade):
     playlist_ids = request.session.get("playlist", [])
