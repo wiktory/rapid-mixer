@@ -30,5 +30,4 @@ urlpatterns = [
     path("playlist/mix_progress/<str:job_id>/", views.mix_progress, name="mix_progress"),
     path("playlist/download_mix/<str:job_id>/", views.download_mix, name="download_mix"),
     path("playlist/update_order/", views.update_playlist_order, name="update_playlist_order"),
-    path("mix/<str:job_id>/", views.mix_page, name="mix_page"),
 ]

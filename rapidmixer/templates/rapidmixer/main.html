@@ -154,9 +154,9 @@
                         </div>
                     {% empty %}
                         <p>
-                            A playlist jelenleg üres. A bal oldali keresőmező segítségével
-                            keress rá a zene előadójára vagy címére és a találati listából
-                            add hozzá a mixelendő zenéket!
+                            A playlist jelenleg üres. A bal oldali keresőmező segítségével keress rá
+                            a zene előadójára vagy címére, és a találati listából add hozzá a
+                            mixelendő zenéket!
                         </p>
                     {% endfor %}
                 </div>
@@ -179,7 +179,7 @@
                     id="mixButton"
                     type="button"
                     class="btn btn-success btn-lg"
-                    style="max-width: 1000px; width: 100%;"
+                    style="width: 100%;"
                 >
                     KÉREM A MIXET!
                 </button>
@@ -222,6 +222,34 @@
 
                 <div class="modal-footer">
                     <button type="button" class="btn btn-success" data-bs-dismiss="modal">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="externalBrowserModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Megnyitás böngészőben</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body">
+                    <p>
+                        Úgy tűnik, hogy az oldal alkalmazáson belüli böngészőben nyílt meg.
+                        A letöltés megbízható működéséhez nyisd meg külső böngészőben.
+                    </p>
+
+                    <a id="externalBrowserLink" href="#" target="_blank" class="btn btn-success">
+                        Megnyitás külső böngészőben
+                    </a>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        Mégse
+                    </button>
                 </div>
             </div>
         </div>
@@ -273,24 +301,17 @@
             modal.show();
         }
 
-        function getJobIdFromLocation() {
-            const pathMatch = window.location.pathname.match(/^\/mix\/([a-zA-Z0-9-]+)\/$/);
-            if (pathMatch) {
-                return pathMatch[1];
-            }
-
-            const params = new URLSearchParams(window.location.search);
-            return params.get("job_id");
+        function isInAppBrowser() {
+            const ua = navigator.userAgent || "";
+            return /FBAN|FBAV|Instagram|Messenger/i.test(ua);
         }
 
-        function setJobUrl(jobId) {
-            const jobUrl = `${window.location.origin}/mix/${jobId}/`;
-            window.history.replaceState({}, "", jobUrl);
-        }
+        function showExternalBrowserModal() {
+            const link = document.getElementById("externalBrowserLink");
+            link.href = window.location.href;
 
-        function clearJobUrl() {
-            const cleanUrl = `${window.location.origin}/`;
-            window.history.replaceState({}, "", cleanUrl);
+            const modal = new bootstrap.Modal(document.getElementById("externalBrowserModal"));
+            modal.show();
         }
 
         function savePlaylistOrder() {
@@ -300,15 +321,10 @@
             fetch(`/playlist/update_order/?order=${encodeURIComponent(order)}`)
                 .then(response => response.json())
                 .then(data => {
-                    if (data.status === "error") {
-                        showPlaylistModal(data.message, "Hiba");
-                    } else {
-                        console.log(data.message);
-                    }
+                    console.log(data.message);
                 })
                 .catch(error => {
                     console.error("Hiba a sorrend mentésekor:", error);
-                    showPlaylistModal("Hiba történt a playlist sorrend mentésekor.", "Hiba");
                 });
         }
 
@@ -346,80 +362,6 @@
             currentButton = button;
         }
 
-        function startProgressPolling(jobId) {
-            const mixButton = document.getElementById("mixButton");
-            const mixOverlay = document.getElementById("mixOverlay");
-            const progressBar = document.getElementById("progressBar");
-            const progressText = document.getElementById("progressText");
-            const mixOverlayTitle = document.getElementById("mixOverlayTitle");
-            const mixOverlayMessage = document.getElementById("mixOverlayMessage");
-            const closeOverlayButton = document.getElementById("closeOverlayButton");
-
-            mixOverlayTitle.textContent = "Mix készítése folyamatban!";
-            mixOverlayMessage.textContent = "Kérlek várj, a zenék feldolgozása zajlik.";
-            closeOverlayButton.style.display = "none";
-            mixOverlay.style.display = "flex";
-            mixButton.disabled = true;
-
-            const interval = setInterval(async () => {
-                try {
-                    const progressResponse = await fetch(`/playlist/mix_progress/${jobId}/`);
-                    const progressData = await progressResponse.json();
-
-                    if (progressData.error) {
-                        clearInterval(interval);
-                        showPlaylistModal(progressData.error, "Hiba");
-                        mixOverlay.style.display = "none";
-                        mixButton.disabled = false;
-                        clearJobUrl();
-                        return;
-                    }
-
-                    const progress = progressData.progress || 0;
-                    progressBar.style.width = progress + "%";
-                    progressText.textContent = progress + "%";
-
-                    if (progressData.status === "done") {
-                        clearInterval(interval);
-
-                        progressBar.style.width = "100%";
-                        progressText.textContent = "100%";
-
-                        downloadUrl = progressData.download_url;
-                        mixButton.textContent = "FÁJL LETÖLTÉSE!";
-                        mixButton.disabled = false;
-
-                        mixOverlayTitle.textContent = "A mix elkészült!";
-                        mixOverlayMessage.textContent =
-                            "A Fájl letöltése gombbal tudod letölteni a mixet.";
-
-                        closeOverlayButton.style.display = "block";
-                        return;
-                    }
-
-                    if (progressData.status === "error") {
-                        clearInterval(interval);
-                        showPlaylistModal(
-                            progressData.error || "Hiba történt a mix készítése közben.",
-                            "Hiba"
-                        );
-                        mixOverlay.style.display = "none";
-                        mixButton.disabled = false;
-                        clearJobUrl();
-                    }
-                } catch (error) {
-                    clearInterval(interval);
-                    console.error("Progress lekérdezési hiba:", error);
-                    showPlaylistModal(
-                        "Hiba történt a feldolgozás állapotának lekérdezése közben.",
-                        "Hiba"
-                    );
-                    mixOverlay.style.display = "none";
-                    mixButton.disabled = false;
-                }
-            }, 1000);
-        }
-
         document.addEventListener("DOMContentLoaded", function () {
             const rangeBpm = document.getElementById("rangeBpm");
             const rangeFade = document.getElementById("rangeFade");
@@ -435,10 +377,13 @@
             const closeOverlayButton = document.getElementById("closeOverlayButton");
 
             const playlistMessage = "{{ playlist_modal_message|default:''|escapejs }}";
-            const restoredJobId = getJobIdFromLocation();
 
             if (playlistMessage) {
                 showPlaylistModal(playlistMessage, "Üzenet");
+            }
+
+            if (isInAppBrowser()) {
+                showExternalBrowserModal();
             }
 
             rangeValue.textContent = rangeBpm.value;
@@ -464,14 +409,12 @@
                     if (e.target.classList.contains("track")) {
                         draggedItem = e.target;
                         e.target.style.opacity = "0.5";
-                        e.target.classList.add("dragging");
                     }
                 });
 
                 playlist.addEventListener("dragend", function (e) {
                     if (e.target.classList.contains("track")) {
                         e.target.style.opacity = "1";
-                        e.target.classList.remove("dragging");
                         draggedItem = null;
                         savePlaylistOrder();
                     }
@@ -509,10 +452,6 @@
                 }, { offset: Number.NEGATIVE_INFINITY }).element;
             }
 
-            if (restoredJobId) {
-                startProgressPolling(restoredJobId);
-            }
-
             mixButton.addEventListener("click", async function () {
                 if (downloadUrl) {
                     const link = document.createElement("a");
@@ -529,7 +468,6 @@
                     progressText.textContent = "0%";
                     mixOverlay.style.display = "none";
                     closeOverlayButton.style.display = "none";
-                    clearJobUrl();
                     return;
                 }
 
@@ -558,8 +496,61 @@
                     }
 
                     const jobId = startData.job_id;
-                    setJobUrl(jobId);
-                    startProgressPolling(jobId);
+
+                    const interval = setInterval(async () => {
+                        try {
+                            const progressResponse = await fetch(`/playlist/mix_progress/${jobId}/`);
+                            const progressData = await progressResponse.json();
+
+                            if (progressData.error) {
+                                clearInterval(interval);
+                                showPlaylistModal(progressData.error, "Hiba");
+                                mixOverlay.style.display = "none";
+                                mixButton.disabled = false;
+                                return;
+                            }
+
+                            const progress = progressData.progress || 0;
+                            progressBar.style.width = progress + "%";
+                            progressText.textContent = progress + "%";
+
+                            if (progressData.status === "done") {
+                                clearInterval(interval);
+
+                                progressBar.style.width = "100%";
+                                progressText.textContent = "100%";
+
+                                downloadUrl = progressData.download_url;
+                                mixButton.textContent = "FÁJL LETÖLTÉSE!";
+                                mixButton.disabled = false;
+
+                                mixOverlayTitle.textContent = "A mix elkészült!";
+                                mixOverlayMessage.textContent =
+                                    "A Fájl letöltése gombbal tudod letölteni a mixet.";
+
+                                closeOverlayButton.style.display = "block";
+                            }
+
+                            if (progressData.status === "error") {
+                                clearInterval(interval);
+                                showPlaylistModal(
+                                    progressData.error || "Hiba történt a mix készítése közben.",
+                                    "Hiba"
+                                );
+                                mixOverlay.style.display = "none";
+                                mixButton.disabled = false;
+                            }
+                        } catch (error) {
+                            clearInterval(interval);
+                            console.error("Progress lekérdezési hiba:", error);
+                            showPlaylistModal(
+                                "Hiba történt a feldolgozás állapotának lekérdezése közben.",
+                                "Hiba"
+                            );
+                            mixOverlay.style.display = "none";
+                            mixButton.disabled = false;
+                        }
+                    }, 1000);
                 } catch (error) {
                     console.error("Mix indítási hiba:", error);
                     showPlaylistModal("Hiba történt a mix indításakor.", "Hiba");
