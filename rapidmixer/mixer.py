@@ -114,7 +114,7 @@ def mix_tracklist_to_target_bpm(
     target_bpm,
     fade_seconds,
     out_path="mixed.wav",
-    sr=32000,
+    sr=22050,
     target_rms=0.1,
     progress_callback=None,
 ):
