@@ -55,7 +55,7 @@ def add_to_playlist(request, id):
 
     if id in playlist:
         request.session["playlist_modal_message"] = "Ez a zene már szerepel a playlistben."
-    elif len(playlist) >= 3:
+    elif len(playlist) >= 5:
         request.session["playlist_modal_message"] = "Elérted a maximum zeneszámot."
     else:
         playlist.append(id)
