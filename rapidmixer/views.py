@@ -55,7 +55,7 @@ def add_to_playlist(request, id):
 
     if id in playlist:
         request.session["playlist_modal_message"] = "Ez a zene már szerepel a playlistben."
-    elif len(playlist) >= 5:
+    elif len(playlist) >= 3:
         request.session["playlist_modal_message"] = "Elérted a maximum zeneszámot."
     else:
         playlist.append(id)
@@ -130,8 +130,6 @@ def delete_all_from_playlist(request):
 
     return redirect("index")
 
-def mix_page(request, job_id):
-    return redirect(f"/?job_id={job_id}")
 
 def start_mix(request, bpm, fade):
     playlist_ids = request.session.get("playlist", [])
