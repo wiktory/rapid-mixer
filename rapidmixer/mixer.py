@@ -121,6 +121,9 @@ def mix_tracklist_to_target_bpm(
     if not track_paths or len(track_paths) < 2:
         raise ValueError("Legalább 2 track kell")
 
+    # Biztonsági limit a túl hosszú fade ellen
+    fade_seconds = min(float(fade_seconds), 15.0)
+
     total_steps = len(track_paths) * 3 + 1
     current_step = 0
 
@@ -132,97 +135,132 @@ def mix_tracklist_to_target_bpm(
             progress_callback(min(progress, 100))
 
     # ----------------------------
-    # ELSŐ TRACK
+    # FILE WRITER
     # ----------------------------
+    outfile = sf.SoundFile(
+        out_path,
+        mode="w",
+        samplerate=sr,
+        channels=2,
+        subtype="PCM_16"
+    )
 
-    y_mix, _ = librosa.load(track_paths[0], sr=sr, mono=False)
-    y_mix = ensure_stereo(y_mix)
-    update_progress()
+    # Ennyi maradjon RAM-ban a mix végéből
+    tail_keep_seconds = 30
+    tail_keep_samples = int(tail_keep_seconds * sr)
 
-    bpm0 = float(track_bpms[0])
-    rate0 = (target_bpm / bpm0) if bpm0 > 0 else 1.0
-
-    # Kis eltérésnél nem stretch-elünk
-    if abs(rate0 - 1.0) > 0.04:
-        y_mix = time_stretch_stereo(y_mix, rate=rate0)
-
-    y_mix = rms_normalize(y_mix, target_rms)
-    update_progress()
-    update_progress()
-
-    # ----------------------------
-    # TÖBBI TRACK
-    # ----------------------------
-
-    for i, path in enumerate(track_paths[1:], start=1):
-        y, _ = librosa.load(path, sr=sr, mono=False)
-        y = ensure_stereo(y)
+    try:
+        # ----------------------------
+        # ELSŐ TRACK
+        # ----------------------------
+        y_tail, _ = librosa.load(track_paths[0], sr=sr, mono=False)
+        y_tail = ensure_stereo(y_tail)
         update_progress()
 
-        bpm = float(track_bpms[i])
-        rate = (target_bpm / bpm) if bpm > 0 else 1.0
+        bpm0 = float(track_bpms[0])
+        rate0 = (target_bpm / bpm0) if bpm0 > 0 else 1.0
 
         # Kis eltérésnél nem stretch-elünk
-        if abs(rate - 1.0) > 0.04:
-            y = time_stretch_stereo(y, rate=rate)
+        if abs(rate0 - 1.0) > 0.04:
+            y_tail = time_stretch_stereo(y_tail, rate=rate0)
 
-        y = rms_normalize(y, target_rms)
+        y_tail = rms_normalize(y_tail, target_rms)
+        update_progress()
         update_progress()
 
         # ----------------------------
-        # GYORSÍTOTT BEAT ANALÍZIS
+        # TÖBBI TRACK
         # ----------------------------
+        for i, path in enumerate(track_paths[1:], start=1):
+            y, _ = librosa.load(path, sr=sr, mono=False)
+            y = ensure_stereo(y)
+            update_progress()
 
-        # Az aktuális mixből csak a végét elemezzük
-        analysis_tail_seconds = 30
-        tail_len = int(analysis_tail_seconds * sr)
+            bpm = float(track_bpms[i])
+            rate = (target_bpm / bpm) if bpm > 0 else 1.0
 
-        y_mix_tail = y_mix[:, -tail_len:] if y_mix.shape[1] > tail_len else y_mix
-        beat_times_a = get_beat_times(y_mix_tail, sr)
+            # Kis eltérésnél nem stretch-elünk
+            if abs(rate - 1.0) > 0.04:
+                y = time_stretch_stereo(y, rate=rate)
 
-        tail_offset = max((y_mix.shape[1] - y_mix_tail.shape[1]) / sr, 0)
-        beat_times_a = beat_times_a + tail_offset
+            y = rms_normalize(y, target_rms)
+            update_progress()
 
-        # Az új trackből csak az elejét elemezzük
-        analysis_head_seconds = 20
-        head_len = int(analysis_head_seconds * sr)
+            # ----------------------------
+            # GYORSÍTOTT BEAT ANALÍZIS
+            # ----------------------------
 
-        y_head = y[:, :head_len] if y.shape[1] > head_len else y
-        beat_times_b = get_beat_times(y_head, sr)
+            # A tail végéből elemezünk
+            analysis_tail_seconds = 30
+            analysis_tail_len = int(analysis_tail_seconds * sr)
 
-        a_duration = y_mix.shape[1] / sr
-        a_exit_time = get_last_mix_beat(beat_times_a, a_duration, fade_seconds)
-        a_exit_sample = int(a_exit_time * sr)
+            y_tail_analysis = (
+                y_tail[:, -analysis_tail_len:]
+                if y_tail.shape[1] > analysis_tail_len
+                else y_tail
+            )
+            beat_times_a = get_beat_times(y_tail_analysis, sr)
 
-        b_entry_time = get_first_mix_beat(beat_times_b, min_start=1.0)
-        b_start_sample = int(b_entry_time * sr)
+            tail_offset = max((y_tail.shape[1] - y_tail_analysis.shape[1]) / sr, 0)
+            beat_times_a = beat_times_a + tail_offset
 
-        fade_len = int(fade_seconds * sr)
-        cut_end = min(a_exit_sample + fade_len, y_mix.shape[1])
-        cut_a = y_mix[:, :cut_end]
+            # Az új track elejét elemezzük
+            analysis_head_seconds = 20
+            analysis_head_len = int(analysis_head_seconds * sr)
 
-        y_mix = beat_aligned_crossfade(
-            cut_a,
-            y,
-            sr,
-            fade_seconds,
-            b_start_sample
-        )
+            y_head = y[:, :analysis_head_len] if y.shape[1] > analysis_head_len else y
+            beat_times_b = get_beat_times(y_head, sr)
 
-        update_progress()
+            a_duration = y_tail.shape[1] / sr
+            a_exit_time = get_last_mix_beat(beat_times_a, a_duration, fade_seconds)
+            a_exit_sample = int(a_exit_time * sr)
 
-    # ----------------------------
-    # VÉGSŐ PEAK LIMIT
-    # ----------------------------
+            b_entry_time = get_first_mix_beat(beat_times_b, min_start=1.0)
+            b_start_sample = int(b_entry_time * sr)
 
-    peak = np.max(np.abs(y_mix))
-    if peak > 0.999:
-        y_mix = y_mix / peak * 0.999
+            fade_len = int(fade_seconds * sr)
+            cut_end = min(a_exit_sample + fade_len, y_tail.shape[1])
+            cut_a = y_tail[:, :cut_end]
 
-    # soundfile stereo mentéshez (samples, channels) alak kell
-    sf.write(out_path, y_mix.T, sr)
+            # ----------------------------
+            # CROSSFADE
+            # ----------------------------
+            combined = beat_aligned_crossfade(
+                cut_a,
+                y,
+                sr,
+                fade_seconds,
+                b_start_sample
+            )
 
-    if progress_callback:
-        progress_callback(100)
+            # ----------------------------
+            # SPLIT: FILE + TAIL
+            # ----------------------------
+            if combined.shape[1] > tail_keep_samples:
+                final_chunk = combined[:, :-tail_keep_samples]
+                y_tail = combined[:, -tail_keep_samples:]
 
-    return out_path
+                # A végleges rész megy a fájlba
+                outfile.write(final_chunk.T)
+            else:
+                # Ha még túl rövid a combined, maradjon teljesen tail-ben
+                y_tail = combined
+
+            update_progress()
+
+        # ----------------------------
+        # VÉGSŐ TAIL KIÍRÁS
+        # ----------------------------
+        peak = np.max(np.abs(y_tail))
+        if peak > 0.999:
+            y_tail = y_tail / peak * 0.999
+
+        outfile.write(y_tail.T)
+
+        if progress_callback:
+            progress_callback(100)
+
+        return out_path
+
+    finally:
+        outfile.close()
