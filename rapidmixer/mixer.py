@@ -24,25 +24,40 @@ def to_mono_for_analysis(y):
 def get_beat_times(y, sr):
     """
     Beat pontok meghatározása mono analízis alapján.
+    HPSS verzió: a percussive komponensen történik a beat tracking,
+    mert ez általában stabilabb ritmikai pontokat ad.
     """
     y_mono = to_mono_for_analysis(y)
-    _, beat_frames = librosa.beat.beat_track(y=y_mono, sr=sr)
+    _, y_percussive = librosa.effects.hpss(y_mono)
+    _, beat_frames = librosa.beat.beat_track(y=y_percussive, sr=sr)
     return librosa.frames_to_time(beat_frames, sr=sr)
 
 
-def get_first_mix_beat(beat_times, min_start=1.0):
+def get_first_mix_beat(beat_times, min_start=1.0, beat_index=4):
+    """
+    Nem az első használható beatet vesszük,
+    hanem egy kicsit későbbit, mert az intro eleje
+    gyakran bizonytalanabb ritmikailag.
+    """
     candidates = beat_times[beat_times >= min_start]
     if len(candidates) == 0:
         return min_start
-    return float(candidates[0])
+    idx = min(beat_index, len(candidates) - 1)
+    return float(candidates[idx])
 
 
-def get_last_mix_beat(beat_times, track_duration, fade_seconds):
+def get_last_mix_beat(beat_times, track_duration, fade_seconds, beats_before_end=2):
+    """
+    Nem a legutolsó beatet használjuk kilépésre,
+    hanem néhány beattel korábbit, hogy stabilabb
+    legyen az átmeneti zóna.
+    """
     target_time = max(track_duration - fade_seconds, 0)
     candidates = beat_times[beat_times <= target_time]
     if len(candidates) == 0:
         return target_time
-    return float(candidates[-1])
+    idx = max(0, len(candidates) - 1 - beats_before_end)
+    return float(candidates[idx])
 
 
 def rms_normalize(y, target_rms=0.1):
@@ -94,8 +109,9 @@ def beat_aligned_crossfade(a, b, sr, fade_seconds, b_start_sample):
     b_head = b[:, :fade_len]
     b_main = b[:, fade_len:]
 
-    fade_out = np.linspace(1.0, 0.0, fade_len)[np.newaxis, :]
-    fade_in = np.linspace(0.0, 1.0, fade_len)[np.newaxis, :]
+    # Equal-power fade a lineáris helyett
+    fade_out = np.cos(np.linspace(0, np.pi / 2, fade_len))[np.newaxis, :]
+    fade_in = np.sin(np.linspace(0, np.pi / 2, fade_len))[np.newaxis, :]
 
     mixed = a_tail * fade_out + b_head * fade_in
 
@@ -114,14 +130,14 @@ def mix_tracklist_to_target_bpm(
     target_bpm,
     fade_seconds,
     out_path="mixed.wav",
-    sr=32000,
+    sr=22050,
     target_rms=0.1,
     progress_callback=None,
 ):
     if not track_paths or len(track_paths) < 2:
         raise ValueError("Legalább 2 track kell")
 
-    # Biztonsági limit a túl hosszú fade ellen
+    # Biztonsági fade limit
     fade_seconds = min(float(fade_seconds), 15.0)
 
     total_steps = len(track_paths) * 3 + 1
@@ -134,9 +150,6 @@ def mix_tracklist_to_target_bpm(
         if progress_callback:
             progress_callback(min(progress, 100))
 
-    # ----------------------------
-    # FILE WRITER
-    # ----------------------------
     outfile = sf.SoundFile(
         out_path,
         mode="w",
@@ -160,7 +173,6 @@ def mix_tracklist_to_target_bpm(
         bpm0 = float(track_bpms[0])
         rate0 = (target_bpm / bpm0) if bpm0 > 0 else 1.0
 
-        # Kis eltérésnél nem stretch-elünk
         if abs(rate0 - 1.0) > 0.04:
             y_tail = time_stretch_stereo(y_tail, rate=rate0)
 
@@ -179,7 +191,6 @@ def mix_tracklist_to_target_bpm(
             bpm = float(track_bpms[i])
             rate = (target_bpm / bpm) if bpm > 0 else 1.0
 
-            # Kis eltérésnél nem stretch-elünk
             if abs(rate - 1.0) > 0.04:
                 y = time_stretch_stereo(y, rate=rate)
 
@@ -187,10 +198,8 @@ def mix_tracklist_to_target_bpm(
             update_progress()
 
             # ----------------------------
-            # GYORSÍTOTT BEAT ANALÍZIS
+            # BEAT ANALÍZIS A TAIL-EN
             # ----------------------------
-
-            # A tail végéből elemezünk
             analysis_tail_seconds = 30
             analysis_tail_len = int(analysis_tail_seconds * sr)
 
@@ -204,7 +213,9 @@ def mix_tracklist_to_target_bpm(
             tail_offset = max((y_tail.shape[1] - y_tail_analysis.shape[1]) / sr, 0)
             beat_times_a = beat_times_a + tail_offset
 
-            # Az új track elejét elemezzük
+            # ----------------------------
+            # BEAT ANALÍZIS AZ ÚJ TRACK ELEJÉN
+            # ----------------------------
             analysis_head_seconds = 20
             analysis_head_len = int(analysis_head_seconds * sr)
 
@@ -212,19 +223,25 @@ def mix_tracklist_to_target_bpm(
             beat_times_b = get_beat_times(y_head, sr)
 
             a_duration = y_tail.shape[1] / sr
-            a_exit_time = get_last_mix_beat(beat_times_a, a_duration, fade_seconds)
+            a_exit_time = get_last_mix_beat(
+                beat_times_a,
+                a_duration,
+                fade_seconds,
+                beats_before_end=2
+            )
             a_exit_sample = int(a_exit_time * sr)
 
-            b_entry_time = get_first_mix_beat(beat_times_b, min_start=1.0)
+            b_entry_time = get_first_mix_beat(
+                beat_times_b,
+                min_start=1.0,
+                beat_index=4
+            )
             b_start_sample = int(b_entry_time * sr)
 
             fade_len = int(fade_seconds * sr)
             cut_end = min(a_exit_sample + fade_len, y_tail.shape[1])
             cut_a = y_tail[:, :cut_end]
 
-            # ----------------------------
-            # CROSSFADE
-            # ----------------------------
             combined = beat_aligned_crossfade(
                 cut_a,
                 y,
@@ -239,11 +256,8 @@ def mix_tracklist_to_target_bpm(
             if combined.shape[1] > tail_keep_samples:
                 final_chunk = combined[:, :-tail_keep_samples]
                 y_tail = combined[:, -tail_keep_samples:]
-
-                # A végleges rész megy a fájlba
                 outfile.write(final_chunk.T)
             else:
-                # Ha még túl rövid a combined, maradjon teljesen tail-ben
                 y_tail = combined
 
             update_progress()
